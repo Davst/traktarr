@@ -15,8 +15,9 @@ cachefile = Config().cachefile
 
 
 class Trakt:
-    non_user_lists = ['anticipated', 'boxoffice', 'played', 'popular', 'recommended',  'trending', 'watched']
-    cache_time = (60 * 60 * 24) #One day in seconds
+    non_user_lists = ['anticipated', 'boxoffice', 'played',
+                      'popular', 'recommended',  'trending', 'watched']
+    cache_time = (60 * 60 * 24)  # One day in seconds
 
     def __init__(self, cfg):
         self.cfg = cfg
@@ -69,10 +70,12 @@ class Trakt:
             if req.status_code == 200 and len(resp_data):
                 return json.loads(resp_data)
             elif req.status_code == 401:
-                log.error("The authentication to Trakt is revoked. Please re-authenticate.")
+                log.error(
+                    "The authentication to Trakt is revoked. Please re-authenticate.")
                 exit()
             else:
-                log.error("Failed to retrieve %s, request response: %d", object_name, req.status_code)
+                log.error("Failed to retrieve %s, request response: %d",
+                          object_name, req.status_code)
                 return None
         except Exception:
             log.exception("Exception retrieving %s: ", object_name)
@@ -100,7 +103,7 @@ class Trakt:
         if payload is None:
             payload = {}
 
-        #Limit pages and results per page if a results_limit was sent.
+        # Limit pages and results per page if a results_limit was sent.
         if limit == 0:
             limit_results = False
             limit = 1000
@@ -137,7 +140,8 @@ class Trakt:
         processed = []
 
         if authenticate_user:
-            type_name = type_name.replace('{authenticate_user}', self._user_used_for_authentication(authenticate_user))
+            type_name = type_name.replace(
+                '{authenticate_user}', self._user_used_for_authentication(authenticate_user))
 
         try:
             resp_data = ''
@@ -147,7 +151,8 @@ class Trakt:
                 retrieve_error = False
                 while attempts <= max_attempts:
                     try:
-                        req, resp_data = self._make_request(url, payload, authenticate_user)
+                        req, resp_data = self._make_request(
+                            url, payload, authenticate_user)
                         if resp_data is not None:
                             retrieve_error = False
                             break
@@ -156,7 +161,8 @@ class Trakt:
                                         type_name, object_name)
 
                     except Exception:
-                        log.exception("Exception retrieving %s %s in _make_item_request: ", type_name, object_name)
+                        log.exception(
+                            "Exception retrieving %s %s in _make_item_request: ", type_name, object_name)
                         retrieve_error = True
 
                     attempts += 1
@@ -170,17 +176,19 @@ class Trakt:
                     return None
 
                 current_page = payload['page']
-                
-                #Limit pages if results are limited.    
+
+                # Limit pages if results are limited.
                 if limit_results == True and not type_name == 'boxoffice':
-                    log.debug("Limiting Trakt list results to %d.",limit)
+                    log.debug("Limiting Trakt list results to %d.", limit)
                 else:
                     if type_name == 'boxoffice':
-                        log.debug("Cannot limit Trakt's Box Office results. It always has 10 results.")
+                        log.debug(
+                            "Cannot limit Trakt's Box Office results. It always has 10 results.")
                         total_pages = 1
                     else:
                         log.debug("Not limiting Trakt list results.")
-                        total_pages = 0 if 'X-Pagination-Page-Count' not in req.headers else int(req.headers['X-Pagination-Page-Count'])
+                        total_pages = 0 if 'X-Pagination-Page-Count' not in req.headers else int(
+                            req.headers['X-Pagination-Page-Count'])
 
                 log.debug("Response Page: %d of %d", current_page, total_pages)
 
@@ -200,48 +208,58 @@ class Trakt:
                                     continue
                                 if item not in processed:
                                     if object_name.rstrip('s') not in item and 'title' in item:
-                                        processed.append({object_name.rstrip('s'): item})
+                                        processed.append(
+                                            {object_name.rstrip('s'): item})
                                     else:
                                         processed.append(item)
                         else:
                             for item in resp_json:
                                 if item not in processed:
                                     if object_name.rstrip('s') not in item and 'title' in item:
-                                        processed.append({object_name.rstrip('s'): item})
+                                        processed.append(
+                                            {object_name.rstrip('s'): item})
                                     else:
                                         processed.append(item)
 
                     elif resp_data == '[]':
-                        log.warning("Received empty JSON response for page: %d of %d", current_page, total_pages)
+                        log.warning(
+                            "Received empty JSON response for page: %d of %d", current_page, total_pages)
                     else:
-                        log.warning("Received malformed JSON response for page: %d of %d", current_page, total_pages)
+                        log.warning(
+                            "Received malformed JSON response for page: %d of %d", current_page, total_pages)
 
                     # check if we have fetched the last page, break if so
                     if total_pages == 0:
                         log.debug("There were no more pages left to retrieve.")
                         break
                     elif current_page >= total_pages:
-                        log.debug("There are no more pages left to retrieve results from.")
+                        log.debug(
+                            "There are no more pages left to retrieve results from.")
                         break
                     else:
-                        log.info("There are %d page(s) left to retrieve results from.", total_pages - current_page)
+                        log.info(
+                            "There are %d page(s) left to retrieve results from.", total_pages - current_page)
                         payload['page'] += 1
                         time.sleep(sleep_between)
 
                 elif req.status_code == 401:
-                    log.error("The authentication to Trakt is revoked. Please re-authenticate.")
+                    log.error(
+                        "The authentication to Trakt is revoked. Please re-authenticate.")
                     exit()
                 else:
-                    log.error("Failed to retrieve %s %s, request response: %d", type_name, object_name, req.status_code)
+                    log.error("Failed to retrieve %s %s, request response: %d",
+                              type_name, object_name, req.status_code)
                     break
 
             if len(processed):
-                log.debug("Found %d %s %s", len(processed), type_name, object_name)
+                log.debug("Found %d %s %s", len(
+                    processed), type_name, object_name)
                 return processed
 
             return None
         except Exception:
-            log.exception("Exception retrieving %s %s: ", type_name, object_name)
+            log.exception("Exception retrieving %s %s: ",
+                          type_name, object_name)
         return None
 
     def validate_client_id(self):
@@ -259,36 +277,38 @@ class Trakt:
         return False
 
     def getPageAndResultsPerPage(self, x):
-       # This function returns the factor that is both closest to and under 1000, and it's opposing factor.
-    
-       log.debug("The factors of",x,"are:")
+        # This function returns the factor that is both closest to and under 1000, and it's opposing factor.
 
-       #Gets the factors of x
-       results_limit_factors = []
-       for i in range(1, x + 1):
-           if x % i == 0:
-               results_limit_factors.append(i)
-       log.debug(results_limit_factors)
-    
-       #Remove factors greater than 1000
-       for integer in results_limit_factors:
-         if integer > 1000:
-           results_limit_factors.remove(integer)
-       results_per_page = min(results_limit_factors, key=lambda y:abs(y-x))
+        log.debug("The factors of", x, "are:")
 
-       #Must have been a prime number over 1000. Switching results around.
-       if results_per_page == 1:
-         pages = 1
-         results_per_page = x
-       else:
-         pages = int(x / results_per_page)
-         
-       log.debug(str(pages)+" pages * "+str(results_per_page)+" results per page.")
-       return pages, results_per_page
+        # Gets the factors of x
+        results_limit_factors = []
+        for i in range(1, x + 1):
+            if x % i == 0:
+                results_limit_factors.append(i)
+        log.debug(results_limit_factors)
+
+        # Remove factors greater than 1000
+        for integer in results_limit_factors:
+            if integer > 1000:
+                results_limit_factors.remove(integer)
+        results_per_page = min(results_limit_factors, key=lambda y: abs(y-x))
+
+        # Must have been a prime number over 1000. Switching results around.
+        if results_per_page == 1:
+            pages = 1
+            results_per_page = x
+        else:
+            pages = int(x / results_per_page)
+
+        log.debug(str(pages)+" pages * " +
+                  str(results_per_page)+" results per page.")
+        return pages, results_per_page
 
     def remove_recommended_item(self, item_type, trakt_id, authenticate_user=None):
         ret, ret_data = self._make_request(
-            url='https://api.trakt.tv/recommendations/%ss/%s' % (item_type, str(trakt_id)),
+            url='https://api.trakt.tv/recommendations/%ss/%s' % (
+                item_type, str(trakt_id)),
             authenticate_user=authenticate_user,
             request_type='delete'
         )
@@ -301,7 +321,8 @@ class Trakt:
     ############################################################
 
     def __oauth_request_device_code(self):
-        log.info("We're talking to Trakt to get your verification code. Please wait a moment...")
+        log.info(
+            "We're talking to Trakt to get your verification code. Please wait a moment...")
 
         payload = {'client_id': self.cfg.trakt.client_id}
 
@@ -331,7 +352,8 @@ class Trakt:
             temp_headers = self._headers_without_authentication()
             temp_headers['Authorization'] = 'Bearer ' + access_token
 
-            req = requests.get('https://api.trakt.tv/users/me', headers=temp_headers)
+            req = requests.get(
+                'https://api.trakt.tv/users/me', headers=temp_headers)
 
             from misc.config import Config
             new_config = Config()
@@ -345,13 +367,17 @@ class Trakt:
             success = True
         elif req.status_code == 404:
             log.debug('The device code was wrong')
-            log.error('Whoops, something went wrong; aborting the authentication process')
+            log.error(
+                'Whoops, something went wrong; aborting the authentication process')
         elif req.status_code == 409:
-            log.error('You\'ve already authenticated this application; aborting the authentication process')
+            log.error(
+                'You\'ve already authenticated this application; aborting the authentication process')
         elif req.status_code == 410:
-            log.error('The authentication process has expired; please start again')
+            log.error(
+                'The authentication process has expired; please start again')
         elif req.status_code == 418:
-            log.error('You\'ve denied the authentication; are you sure? Please try again')
+            log.error(
+                'You\'ve denied the authentication; are you sure? Please try again')
         elif req.status_code == 429:
             log.debug('We\'re polling too quickly.')
 
@@ -430,13 +456,15 @@ class Trakt:
         token_information = self.cfg['trakt'][user]
 
         # Check if the access_token for the user is expired
-        expires_at = token_information['created_at'] + token_information['expires_in']
+        expires_at = token_information['created_at'] + \
+            token_information['expires_in']
         if expires_at < round(time.time()):
             log.info("The access token for the user %s has expired. We're requesting a new one; please wait a moment.",
                      user)
 
             if self.__oauth_refresh_access_token(token_information["refresh_token"]):
-                log.info("The access token for the user %s has been refreshed. Please restart the application.", user)
+                log.info(
+                    "The access token for the user %s has been refreshed. Please restart the application.", user)
 
     def _user_used_for_authentication(self, user=None):
         if user is None:
@@ -463,7 +491,8 @@ class Trakt:
 
         if user is not None:
             self._renew_oauth_token_if_expired(user)
-            headers['Authorization'] = 'Bearer ' + self.cfg['trakt'][user]['access_token']
+            headers['Authorization'] = 'Bearer ' + \
+                self.cfg['trakt'][user]['access_token']
         else:
             log.info('No user')
 
@@ -568,7 +597,8 @@ class Trakt:
     ):
 
         return self._make_items_request(
-            url='https://api.trakt.tv/people/%s/shows' % person.replace(' ', '-').lower(),
+            url='https://api.trakt.tv/people/%s/shows' % person.replace(
+                ' ', '-').lower(),
             page=page,
             object_name='shows',
             type_name='person',
@@ -595,7 +625,8 @@ class Trakt:
     ):
 
         return self._make_items_request(
-            url='https://api.trakt.tv/shows/played/%s' % ('weekly' if not most_type else most_type),
+            url='https://api.trakt.tv/shows/played/%s' % (
+                'weekly' if not most_type else most_type),
             page=page,
             object_name='shows',
             type_name='played',
@@ -621,7 +652,8 @@ class Trakt:
     ):
 
         return self._make_items_request(
-            url='https://api.trakt.tv/shows/watched/%s' % ('weekly' if not most_type else most_type),
+            url='https://api.trakt.tv/shows/watched/%s' % (
+                'weekly' if not most_type else most_type),
             page=page,
             object_name='shows',
             type_name='watched',
@@ -704,7 +736,8 @@ class Trakt:
         log.debug('Fetching %s from %s', list_key, list_user)
 
         return self._make_items_request(
-            url='https://api.trakt.tv/users/' + list_user + '/lists/' + list_key + '/items/shows',
+            url='https://api.trakt.tv/users/' + list_user +
+                '/lists/' + list_key + '/items/shows',
             object_name='shows',
             type_name=(list_key + ' from ' + list_user),
             authenticate_user=authenticate_user,
@@ -816,7 +849,8 @@ class Trakt:
     ):
 
         return self._make_items_request(
-            url='https://api.trakt.tv/people/%s/movies' % person.replace(' ', '-').lower(),
+            url='https://api.trakt.tv/people/%s/movies' % person.replace(
+                ' ', '-').lower(),
             page=page,
             object_name='movies',
             type_name='person',
@@ -843,7 +877,8 @@ class Trakt:
     ):
 
         return self._make_items_request(
-            url='https://api.trakt.tv/movies/played/%s' % ('weekly' if not most_type else most_type),
+            url='https://api.trakt.tv/movies/played/%s' % (
+                'weekly' if not most_type else most_type),
             page=page,
             object_name='movies',
             type_name='played',
@@ -869,7 +904,8 @@ class Trakt:
     ):
 
         return self._make_items_request(
-            url='https://api.trakt.tv/movies/watched/%s' % ('weekly' if not most_type else most_type),
+            url='https://api.trakt.tv/movies/watched/%s' % (
+                'weekly' if not most_type else most_type),
             page=page,
             object_name='movies',
             type_name='watched',
@@ -965,7 +1001,8 @@ class Trakt:
         log.debug('Fetching %s from %s', list_key, list_user)
 
         return self._make_items_request(
-            url='https://api.trakt.tv/users/' + list_user + '/lists/' + list_key + '/items/movies',
+            url='https://api.trakt.tv/users/' + list_user +
+                '/lists/' + list_key + '/items/movies',
             object_name='movies',
             type_name=(list_key + ' from ' + list_user),
             authenticate_user=authenticate_user,

@@ -25,7 +25,8 @@ notify = None
     type=click.Path(file_okay=True, dir_okay=False),
     help='Configuration file',
     show_default=True,
-    default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "config.json")
+    default=os.path.join(os.path.dirname(
+        os.path.realpath(sys.argv[0])), "config.json")
 )
 @click.option(
     '--cachefile',
@@ -33,7 +34,8 @@ notify = None
     type=click.Path(file_okay=True, dir_okay=False),
     help='Cache file',
     show_default=True,
-    default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "cache.db")
+    default=os.path.join(os.path.dirname(
+        os.path.realpath(sys.argv[0])), "cache.db")
 )
 @click.option(
     '--logfile',
@@ -41,7 +43,8 @@ notify = None
     type=click.Path(file_okay=True, dir_okay=False),
     help='Log file',
     show_default=True,
-    default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "activity.log")
+    default=os.path.join(os.path.dirname(
+        os.path.realpath(sys.argv[0])), "activity.log")
 )
 def app(config, cachefile, logfile):
     # Setup global variables
@@ -92,7 +95,8 @@ def validate_trakt(trakt, notifications):
     if not trakt.validate_client_id():
         log.error("Aborting due to failure to validate Trakt API Key")
         if notifications:
-            callback_notify({'event': 'error', 'reason': 'Failure to validate Trakt API Key'})
+            callback_notify(
+                {'event': 'error', 'reason': 'Failure to validate Trakt API Key'})
         exit()
     else:
         log.info("...Validated Trakt API Key.")
@@ -102,7 +106,8 @@ def validate_pvr(pvr, pvr_type, notifications):
     if not pvr.validate_api_key():
         log.error("Aborting due to failure to validate %s URL / API Key", pvr_type)
         if notifications:
-            callback_notify({'event': 'error', 'reason': 'Failure to validate %s URL / API Key' % pvr_type})
+            callback_notify(
+                {'event': 'error', 'reason': 'Failure to validate %s URL / API Key' % pvr_type})
         return None
     else:
         log.info("Validated %s URL & API Key.", pvr_type)
@@ -112,9 +117,11 @@ def get_quality_profile_id(pvr, quality_profile):
     # retrieve profile id for requested quality profile
     quality_profile_id = pvr.get_quality_profile_id(quality_profile)
     if not quality_profile_id or quality_profile_id <= 0:
-        log.error("Aborting due to failure to retrieve Quality Profile ID for: %s", quality_profile)
+        log.error(
+            "Aborting due to failure to retrieve Quality Profile ID for: %s", quality_profile)
         exit()
-    log.info("Retrieved Quality Profile ID for \'%s\': %d", quality_profile, quality_profile_id)
+    log.info("Retrieved Quality Profile ID for \'%s\': %d",
+             quality_profile, quality_profile_id)
     return quality_profile_id
 
 
@@ -124,7 +131,8 @@ def get_language_profile_id(pvr, language_profile):
     if not language_profile_id or language_profile_id <= 0:
         log.error("No Language Profile ID for: %s", language_profile)
     else:
-        log.info("Retrieved Language Profile ID for \'%s\': %d", language_profile, language_profile_id)
+        log.info("Retrieved Language Profile ID for \'%s\': %d",
+                 language_profile, language_profile_id)
     return language_profile_id
 
 
@@ -141,12 +149,14 @@ def get_objects(pvr, pvr_type, notifications):
     objects_list = pvr.get_objects()
     objects_type = 'movies' if pvr_type.lower() == 'radarr' else 'shows'
     if not objects_list:
-        log.error("Aborting due to failure to retrieve %s list from %s", objects_type, pvr_type)
+        log.error("Aborting due to failure to retrieve %s list from %s",
+                  objects_type, pvr_type)
         if notifications:
             callback_notify({'event': 'error', 'reason': 'Failure to retrieve \'%s\' list from %s' % (objects_type,
                                                                                                       pvr_type)})
         exit()
-    log.info("Retrieved %s %s list, %s found: %d", pvr_type, objects_type, objects_type, len(objects_list))
+    log.info("Retrieved %s %s list, %s found: %d", pvr_type,
+             objects_type, objects_type, len(objects_list))
     return objects_list
 
 
@@ -155,7 +165,8 @@ def get_exclusions(pvr, pvr_type):
     objects_type = 'movie' if pvr_type.lower() == 'radarr' else 'show'
     if not objects_list:
         log.info("No %s exclusions list found from %s", objects_type, pvr_type)
-    log.info("Retrieved %s %s list, %s found: %d", pvr_type, objects_type, objects_type, len(objects_list))
+    log.info("Retrieved %s %s list, %s found: %d", pvr_type,
+             objects_type, objects_type, len(objects_list))
     return objects_list
 
 
@@ -211,11 +222,13 @@ def show(
     if trakt_show['year']:
         series_year = str(trakt_show['year'])
     elif trakt_show['first_aired']:
-        series_year = misc_str.get_year_from_timestamp(trakt_show['first_aired'])
+        series_year = misc_str.get_year_from_timestamp(
+            trakt_show['first_aired'])
     else:
         series_year = '????'
 
-    log.info("Retrieved Trakt show information for \'%s\': \'%s (%s)\'", show_id, series_title, series_year)
+    log.info("Retrieved Trakt show information for \'%s\': \'%s (%s)\'",
+             show_id, series_title, series_year)
 
     # quality profile id
     quality_profile_id = get_quality_profile_id(sonarr, cfg.sonarr.quality)
@@ -247,7 +260,8 @@ def show(
     else:
         series_type = 'standard'
 
-    log.debug("Set series type for \'%s (%s)\' to: %s", series_title, series_year, series_type.title())
+    log.debug("Set series type for \'%s (%s)\' to: %s",
+              series_title, series_year, series_type.title())
 
     # add show to sonarr
     if sonarr.add_series(
@@ -406,8 +420,10 @@ def shows(
             genres = None
         else:
             # remove genres from show's blacklisted_genres list
-            misc_helper.unblacklist_genres(genres, cfg['filters']['shows']['blacklisted_genres'])
-            log.debug("Filter Trakt results with genre(s): %s", ', '.join(map(lambda x: x.title(), genres)))
+            misc_helper.unblacklist_genres(
+                genres, cfg['filters']['shows']['blacklisted_genres'])
+            log.debug("Filter Trakt results with genre(s): %s",
+                      ', '.join(map(lambda x: x.title(), genres)))
 
     # process years parameter
     years, new_min_year, new_max_year = parameter_helper.years(
@@ -441,29 +457,29 @@ def shows(
 
     # validate trakt client_id
     trakt = Trakt(cfg)
-        
-    #Handle results_limits
+
+    # Handle results_limits
     if list_type in trakt.non_user_lists:
-        #Rename cache depending on which list is called. 
+        # Rename cache depending on which list is called.
         if list_type == "played" or list_type == "watched":
             cache_name = "get_most_"+list_type+"_shows.db"
         else:
             cache_name = "get_"+list_type+"_shows.db"
-        log.debug("Naming cache %s",cache_name)
-        if results_limit != 0:#If a limited Trakt list is called
+        log.debug("Naming cache %s", cache_name)
+        if results_limit != 0:  # If a limited Trakt list is called
             log.debug("A limited Trakt list was called.")
-            #Limit cache time to one second 
-            trakt.cache_time = 1 
-            log.debug("Limiting cache time to %d",trakt.cache_time)
-            #Delete cache
+            # Limit cache time to one second
+            trakt.cache_time = 1
+            log.debug("Limiting cache time to %d", trakt.cache_time)
+            # Delete cache
             if os.path.isfile(cache_name):
                 os.remove(cache_name)
-                log.debug("Cache exists for this list. Deleting %s",cache_name)
+                log.debug("Cache exists for this list. Deleting %s", cache_name)
         else:
-            log.debug("Unlimited list was called. Not deleting %s",cache_name)
+            log.debug("Unlimited list was called. Not deleting %s", cache_name)
     else:
         log.debug("The list called does not cache.")
-    
+
     sonarr = Sonarr(cfg.sonarr.url, cfg.sonarr.api_key)
 
     validate_trakt(trakt, notifications)
@@ -578,19 +594,23 @@ def shows(
         )
 
     elif list_type.lower() == 'watchlist':
-        trakt_objects_list = trakt.get_watchlist_shows(authenticate_user, limit=results_limit)
+        trakt_objects_list = trakt.get_watchlist_shows(
+            authenticate_user, limit=results_limit)
     else:
-        trakt_objects_list = trakt.get_user_list_shows(list_type, authenticate_user, limit=results_limit)
+        trakt_objects_list = trakt.get_user_list_shows(
+            list_type, authenticate_user, limit=results_limit)
 
     if not trakt_objects_list:
-        log.error("Aborting due to failure to retrieve Trakt \'%s\' shows list.", list_type.capitalize())
+        log.error("Aborting due to failure to retrieve Trakt \'%s\' shows list.",
+                  list_type.capitalize())
         if notifications:
             callback_notify(
                 {'event': 'abort', 'type': 'shows', 'list_type': list_type,
                  'reason': 'Failure to retrieve Trakt \'%s\' shows list.' % list_type.capitalize()})
         return None
     else:
-        log.info("Retrieved Trakt \'%s\' shows list, shows found: %d", list_type.capitalize(), len(trakt_objects_list))
+        log.info("Retrieved Trakt \'%s\' shows list, shows found: %d",
+                 list_type.capitalize(), len(trakt_objects_list))
 
     # set remove_rejected_recommended to False if this is not the recommended list
     if list_type.lower() != 'recommended':
@@ -604,7 +624,8 @@ def shows(
     )
 
     if processed_series_list is None:
-        log.error("Aborting due to failure to remove existing Sonarr shows from retrieved Trakt shows list.")
+        log.error(
+            "Aborting due to failure to remove existing Sonarr shows from retrieved Trakt shows list.")
         if notifications:
             callback_notify({'event': 'abort', 'type': 'shows', 'list_type': list_type,
                              'reason': 'Failure to remove existing Sonarr shows from retrieved Trakt \'%s\' shows list.'
@@ -616,13 +637,16 @@ def shows(
 
     # sort filtered series list
     if sort == 'release':
-        sorted_series_list = misc_helper.sorted_list(processed_series_list, 'show', 'first_aired')
+        sorted_series_list = misc_helper.sorted_list(
+            processed_series_list, 'show', 'first_aired')
         log.info("Sorted shows list to process by recent 'release' date.")
     elif sort == 'rating':
-        sorted_series_list = misc_helper.sorted_list(processed_series_list, 'show', 'rating')
+        sorted_series_list = misc_helper.sorted_list(
+            processed_series_list, 'show', 'rating')
         log.info("Sorted shows list to process by highest 'rating'.")
     else:
-        sorted_series_list = misc_helper.sorted_list(processed_series_list, 'show', 'votes')
+        sorted_series_list = misc_helper.sorted_list(
+            processed_series_list, 'show', 'votes')
         log.info("Sorted shows list to process by highest 'votes'.")
 
     # loop series_list
@@ -639,7 +663,8 @@ def shows(
         if series['show']['year']:
             series_year = str(series['show']['year'])
         elif series['show']['first_aired']:
-            series_year = misc_str.get_year_from_timestamp(series['show']['first_aired'])
+            series_year = misc_str.get_year_from_timestamp(
+                series['show']['first_aired'])
         else:
             series_year = '????'
 
@@ -649,10 +674,12 @@ def shows(
         else:
             series_type = 'standard'
 
-        log.debug("Set series type for \'%s (%s)\' to: %s", series_title, series_year, series_type.title())
+        log.debug("Set series type for \'%s (%s)\' to: %s",
+                  series_title, series_year, series_type.title())
 
         # build list of genres
-        series_genres = (', '.join(series['show']['genres'])).title() if series['show']['genres'] else 'N/A'
+        series_genres = (', '.join(series['show']['genres'])).title(
+        ) if series['show']['genres'] else 'N/A'
 
         try:
             # check if movie has a valid TVDB ID and that it exists on TVDB
@@ -703,16 +730,19 @@ def shows(
                             log.info("ADDED: \'%s (%s)\' with Sonarr Tags: %s", series_title, series_year,
                                      tag_names)
                         else:
-                            log.info("ADDED: \'%s (%s)\'", series_title, series_year)
+                            log.info("ADDED: \'%s (%s)\'",
+                                     series_title, series_year)
                         if notifications:
-                            callback_notify({'event': 'add_show', 'list_type': list_type, 'show': series['show']})
+                            callback_notify(
+                                {'event': 'add_show', 'list_type': list_type, 'show': series['show']})
                         added_shows += 1
                     else:
                         if profile_tags is not None:
                             log.error("FAILED ADDING: \'%s (%s)\' with Sonarr Tags: %s", series_title, series_year,
                                       tag_names)
                         else:
-                            log.info("FAILED ADDING: \'%s (%s)\'", series_title, series_year)
+                            log.info("FAILED ADDING: \'%s (%s)\'",
+                                     series_title, series_year)
                         continue
 
             else:
@@ -727,14 +757,17 @@ def shows(
             time.sleep(add_delay)
 
         except Exception:
-            log.exception("Exception while processing show \'%s\': ", series_title)
+            log.exception(
+                "Exception while processing show \'%s\': ", series_title)
 
-    log.info("Removed %d show(s) blacklisted by your configuration.",blacklisted_series)
+    log.info("Removed %d show(s) blacklisted by your configuration.",
+             blacklisted_series)
     log.info("Added %d new show(s) to Sonarr", added_shows)
 
     # send notification
     if notifications and (cfg.notifications.verbose or added_shows > 0):
-        notify.send(message="Added %d shows from Trakt's \'%s\' list" % (added_shows, list_type))
+        notify.send(message="Added %d shows from Trakt's \'%s\' list" %
+                    (added_shows, list_type))
 
     return added_shows
 
@@ -783,7 +816,8 @@ def movie(
     elif cfg['radarr']['minimum_availability'] not in valid_min_avail:
         cfg['radarr']['minimum_availability'] = 'released'
 
-    log.debug('Set minimum availability to: \'%s\'', cfg['radarr']['minimum_availability'])
+    log.debug('Set minimum availability to: \'%s\'',
+              cfg['radarr']['minimum_availability'])
 
     # validate trakt api_key
     trakt = Trakt(cfg)
@@ -805,7 +839,8 @@ def movie(
     # convert movie year to string
     movie_year = str(trakt_movie['year']) if trakt_movie['year'] else '????'
 
-    log.info("Retrieved Trakt movie information for \'%s\': \'%s (%s)\'", movie_id, trakt_movie['title'], movie_year)
+    log.info("Retrieved Trakt movie information for \'%s\': \'%s (%s)\'",
+             movie_id, trakt_movie['title'], movie_year)
 
     # add movie to radarr
     if radarr.add_movie(
@@ -821,7 +856,8 @@ def movie(
 
         log.info("ADDED \'%s (%s)\'", trakt_movie['title'], movie_year)
     else:
-        log.error("FAILED ADDING \'%s (%s)\'", trakt_movie['title'], movie_year)
+        log.error("FAILED ADDING \'%s (%s)\'",
+                  trakt_movie['title'], movie_year)
 
     return
 
@@ -966,8 +1002,10 @@ def movies(
             genres = None
         else:
             # remove genre from movies's blacklisted_genres list, if it's there
-            misc_helper.unblacklist_genres(genres, cfg['filters']['movies']['blacklisted_genres'])
-            log.debug("Filter Trakt results with genre(s): %s", ', '.join(map(lambda x: x.title(), genres)))
+            misc_helper.unblacklist_genres(
+                genres, cfg['filters']['movies']['blacklisted_genres'])
+            log.debug("Filter Trakt results with genre(s): %s",
+                      ', '.join(map(lambda x: x.title(), genres)))
 
     # process years parameter
     years, new_min_year, new_max_year = parameter_helper.years(
@@ -1008,7 +1046,8 @@ def movies(
     elif cfg['radarr']['minimum_availability'] not in valid_min_avail:
         cfg['radarr']['minimum_availability'] = 'released'
 
-    log.debug('Set minimum availability to: \'%s\'', cfg['radarr']['minimum_availability'])
+    log.debug('Set minimum availability to: \'%s\'',
+              cfg['radarr']['minimum_availability'])
 
     # validate trakt api_key
     trakt = Trakt(cfg)
@@ -1023,30 +1062,28 @@ def movies(
     pvr_objects_list = get_objects(radarr, 'Radarr', notifications)
     pvr_exclusions_list = get_exclusions(radarr, 'Radarr')
 
-    
-    #Handle limited Trakt lists
+    # Handle limited Trakt lists
     if list_type in trakt.non_user_lists:
-        #Rename cache depending on which list is called. 
+        # Rename cache depending on which list is called.
         if list_type == "played" or list_type == "watched":
             cache_name = "get_most_"+list_type+"_movies.db"
         else:
             cache_name = "get_"+list_type+"_movies.db"
-        log.debug("Naming cache %s",cache_name)
-        if results_limit != 0:#If a limited Trakt list is called
+        log.debug("Naming cache %s", cache_name)
+        if results_limit != 0:  # If a limited Trakt list is called
             log.debug("A limited Trakt list was called.")
-            #Limit cache time to one second 
-            trakt.cache_time = 1 
-            log.debug("Limiting cache time to %d",trakt.cache_time)
-            #Delete cache
+            # Limit cache time to one second
+            trakt.cache_time = 1
+            log.debug("Limiting cache time to %d", trakt.cache_time)
+            # Delete cache
             if os.path.isfile(cache_name):
                 os.remove(cache_name)
-                log.debug("Cache exists for this list. Deleting %s",cache_name)
+                log.debug("Cache exists for this list. Deleting %s", cache_name)
         else:
-            log.debug("Unlimited list was called. Not deleting %s",cache_name)
+            log.debug("Unlimited list was called. Not deleting %s", cache_name)
     else:
         log.debug("The list called does not cache.")
-    
-    
+
     # get trakt movies list
     if list_type.lower() == 'anticipated':
         trakt_objects_list = trakt.get_anticipated_movies(
@@ -1133,12 +1170,15 @@ def movies(
         )
 
     elif list_type.lower() == 'watchlist':
-        trakt_objects_list = trakt.get_watchlist_movies(authenticate_user, limit=results_limit)
+        trakt_objects_list = trakt.get_watchlist_movies(
+            authenticate_user, limit=results_limit)
     else:
-        trakt_objects_list = trakt.get_user_list_movies(list_type, authenticate_user, limit=results_limit)
+        trakt_objects_list = trakt.get_user_list_movies(
+            list_type, authenticate_user, limit=results_limit)
 
     if not trakt_objects_list:
-        log.error("Aborting due to failure to retrieve Trakt \'%s\' movies list.", list_type.capitalize())
+        log.error("Aborting due to failure to retrieve Trakt \'%s\' movies list.",
+                  list_type.capitalize())
         if notifications:
             callback_notify(
                 {'event': 'abort', 'type': 'movies', 'list_type': list_type,
@@ -1161,13 +1201,15 @@ def movies(
 
     if processed_movies_list is None:
         if not removal_successful:
-            log.error("Aborting due to failure to remove existing Radarr movies from retrieved Trakt movies list.")
+            log.error(
+                "Aborting due to failure to remove existing Radarr movies from retrieved Trakt movies list.")
             if notifications:
                 callback_notify({'event': 'abort', 'type': 'movies', 'list_type': list_type,
                                  'reason': 'Failure to remove existing Radarr movies from retrieved '
                                            'Trakt \'%s\' movies list.' % list_type.capitalize()})
         else:
-            log.info("No more movies left to process in \'%s\' movies list.", list_type.capitalize())
+            log.info(
+                "No more movies left to process in \'%s\' movies list.", list_type.capitalize())
         return None
     else:
         log.info("Removed existing and excluded Radarr movies from Trakt movies list. Movies left to process: %d",
@@ -1175,21 +1217,26 @@ def movies(
 
     # sort filtered movie list
     if sort == 'release':
-        sorted_movies_list = misc_helper.sorted_list(processed_movies_list, 'movie', 'released')
+        sorted_movies_list = misc_helper.sorted_list(
+            processed_movies_list, 'movie', 'released')
         log.info("Sorted movies list to process by recent 'release' date.")
     elif sort == 'rating':
-        sorted_movies_list = misc_helper.sorted_list(processed_movies_list, 'movie', 'rating')
+        sorted_movies_list = misc_helper.sorted_list(
+            processed_movies_list, 'movie', 'rating')
         log.info("Sorted movies list to process by highest 'rating'.")
     else:
-        sorted_movies_list = misc_helper.sorted_list(processed_movies_list, 'movie', 'votes')
+        sorted_movies_list = misc_helper.sorted_list(
+            processed_movies_list, 'movie', 'votes')
         log.info("Sorted movies list to process by highest 'votes'.")
 
     # display specified min RT score
     if rotten_tomatoes is not None:
         if cfg.omdb.api_key:
-            log.info("Minimum Rotten Tomatoes score of %d%% requested.", rotten_tomatoes)
+            log.info(
+                "Minimum Rotten Tomatoes score of %d%% requested.", rotten_tomatoes)
         else:
-            log.info("Skipping minimum Rotten Tomatoes score check as OMDb API Key is missing.")
+            log.info(
+                "Skipping minimum Rotten Tomatoes score check as OMDb API Key is missing.")
 
     # loop movies
     log.info("Processing list now...")
@@ -1265,10 +1312,12 @@ def movies(
 
                         log.info("ADDED: \'%s (%s)\'", movie_title, movie_year)
                         if notifications:
-                            callback_notify({'event': 'add_movie', 'list_type': list_type, 'movie': sorted_movie['movie']})
+                            callback_notify(
+                                {'event': 'add_movie', 'list_type': list_type, 'movie': sorted_movie['movie']})
                         added_movies += 1
                     else:
-                        log.error("FAILED ADDING: \'%s (%s)\'", movie_title, movie_year)
+                        log.error("FAILED ADDING: \'%s (%s)\'",
+                                  movie_title, movie_year)
                         continue
             else:
                 log.info("SKIPPED: \'%s (%s)\'", movie_title, movie_year)
@@ -1284,13 +1333,15 @@ def movies(
             else:
                 blacklisted_movies += 1
         except Exception:
-            log.exception("Exception while processing movie \'%s\': ", movie_title)
+            log.exception(
+                "Exception while processing movie \'%s\': ", movie_title)
 
     log.info("Added %d new movie(s) to Radarr", added_movies)
 
     # send notification
     if notifications and (cfg.notifications.verbose or added_movies > 0):
-        notify.send(message="Added %d movie(s) from Trakt's \'%s\' list" % (added_movies, list_type.capitalize()))
+        notify.send(message="Added %d movie(s) from Trakt's \'%s\' list" %
+                    (added_movies, list_type.capitalize()))
 
     return added_movies
 
@@ -1311,14 +1362,17 @@ def callback_remove_recommended(media_type, media_info):
         return
 
     # convert media year to string
-    media_year = str(media_info[media_type]['year']) if media_info[media_type]['year'] else '????'
+    media_year = str(media_info[media_type]['year']
+                     ) if media_info[media_type]['year'] else '????'
 
     media_name = '\'%s (%s)\'' % (media_info[media_type]['title'], media_year)
 
     if trakt.remove_recommended_item(media_type, media_info[media_type]['ids']['trakt']):
-        log.info("Removed rejected recommended %s: \'%s\'", media_type, media_name)
+        log.info("Removed rejected recommended %s: \'%s\'",
+                 media_type, media_name)
     else:
-        log.info("FAILED removing rejected recommended %s: \'%s\'", media_type, media_name)
+        log.info("FAILED removing rejected recommended %s: \'%s\'",
+                 media_type, media_name)
 
 
 def callback_notify(data):
@@ -1339,7 +1393,8 @@ def callback_notify(data):
     elif data['event'] == 'add_show':
 
         # convert series year to string
-        series_year = str(data['show']['year']) if data['show']['year'] else '????'
+        series_year = str(data['show']['year']
+                          ) if data['show']['year'] else '????'
 
         if cfg.notifications.verbose:
             notify.send(
@@ -1391,19 +1446,23 @@ def automatic_shows(
             if list_type.lower() in Trakt.non_user_lists or (
                     '_' in list_type and list_type.lower().partition("_")[0] in Trakt.non_user_lists):
                 if isinstance(value, dict):
-                    log.debug("Automatic config for %s contains a dictionary. Handle appropriately.",list_type)
+                    log.debug(
+                        "Automatic config for %s contains a dictionary. Handle appropriately.", list_type)
                     limit = value["add_limit"]
                     results_limit = value["results_limit"]
                 else:
-                    log.debug("Automatic config for %s contains no dictionary.",list_type)
+                    log.debug(
+                        "Automatic config for %s contains no dictionary.", list_type)
                     limit = value
                     results_limit = 0
 
                 if limit <= 0:
-                    log.info("SKIPPED Trakt's \'%s\' shows list.", list_type.capitalize())
+                    log.info("SKIPPED Trakt's \'%s\' shows list.",
+                             list_type.capitalize())
                     continue
                 else:
-                    log.info("ADDING %d show(s) from Trakt's \'%s\' list.", limit, list_type.capitalize())
+                    log.info("ADDING %d show(s) from Trakt's \'%s\' list.",
+                             limit, list_type.capitalize())
 
                 local_ignore_blacklist = ignore_blacklist
 
@@ -1425,14 +1484,17 @@ def automatic_shows(
             elif list_type.lower() == 'watchlist':
                 for authenticate_user, limit in value.items():
                     if isinstance(limit, dict):
-                        log.debug("Automatic config for %s contains a dictionary. Handle appropriately.",list_type)
+                        log.debug(
+                            "Automatic config for %s contains a dictionary. Handle appropriately.", list_type)
                         results_limit = limit["results_limit"]
                         limit = limit['add_limit']
                     else:
-                        log.debug("Automatic config for %s contains no dictionary.",list_type)
+                        log.debug(
+                            "Automatic config for %s contains no dictionary.", list_type)
                         results_limit = 0
                     if limit <= 0:
-                        log.info("SKIPPED Trakt user \'%s\''s \'%s\'", authenticate_user, list_type.capitalize)
+                        log.info("SKIPPED Trakt user \'%s\''s \'%s\'",
+                                 authenticate_user, list_type.capitalize)
                         continue
                     else:
                         log.info("ADDING %d show(s) from Trakt user \'%s\''s \'%s\'", limit, authenticate_user,
@@ -1459,25 +1521,28 @@ def automatic_shows(
             elif list_type.lower() == 'lists':
 
                 if len(value.items()) == 0:
-                    log.info("SKIPPED Trakt's \'%s\' shows list.", list_type.capitalize())
+                    log.info("SKIPPED Trakt's \'%s\' shows list.",
+                             list_type.capitalize())
                     continue
 
                 for list_, v in value.items():
                     if isinstance(v, dict):
-                        log.debug("Automatic config for %s contains a dictionary. Handle appropriately.",list_type)
+                        log.debug(
+                            "Automatic config for %s contains a dictionary. Handle appropriately.", list_type)
                         authenticate_user = v['authenticate_user']
                         limit = v['add_limit']
                         results_limit = v["results_limit"]
                     else:
-                        log.debug("Automatic config for %s contains no dictionary.",list_type)
+                        log.debug(
+                            "Automatic config for %s contains no dictionary.", list_type)
                         authenticate_user = None
                         limit = v
-                        results_limit = 0      
+                        results_limit = 0
                     if limit <= 0:
                         log.info("Skipped Trakt's user list: %s", list_)
                         continue
                     else:
-                        log.info("Adding %d shows from %s", limit, list_type)         
+                        log.info("Adding %d shows from %s", limit, list_type)
 
                     if limit <= 0:
                         log.info("SKIPPED Trakt's \'%s\' shows list.", list_)
@@ -1503,7 +1568,8 @@ def automatic_shows(
 
             if added_shows is None:
                 if list_type.lower() != 'lists':
-                    log.info("FAILED ADDING shows from Trakt's \'%s\' list.", list_type)
+                    log.info(
+                        "FAILED ADDING shows from Trakt's \'%s\' list.", list_type)
                 time.sleep(10)
                 continue
             total_shows_added += added_shows
@@ -1514,7 +1580,8 @@ def automatic_shows(
         log.info("FINISHED: Added %d show(s) total to Sonarr!", total_shows_added)
         # send notification
         if notifications and (cfg.notifications.verbose or total_shows_added > 0):
-            notify.send(message="Added %d show(s) total to Sonarr!" % total_shows_added)
+            notify.send(message="Added %d show(s) total to Sonarr!" %
+                        total_shows_added)
 
     except Exception:
         log.exception("Exception while automatically adding shows: ")
@@ -1551,22 +1618,26 @@ def automatic_movies(
                     '_' in list_type and list_type.lower().partition("_")[0] in Trakt.non_user_lists):
 
                 if isinstance(value, dict):
-                    log.debug("Automatic config for %s contains a dictionary. Handle appropriately.",list_type)
+                    log.debug(
+                        "Automatic config for %s contains a dictionary. Handle appropriately.", list_type)
                     limit = value["add_limit"]
                     if list_type == 'boxoffice':
                         results_limit = 10
                     else:
                         results_limit = value["results_limit"]
                 else:
-                    log.debug("Automatic config for %s contains no dictionary.",list_type)
+                    log.debug(
+                        "Automatic config for %s contains no dictionary.", list_type)
                     limit = value
                     results_limit = 0
 
                 if limit <= 0:
-                    log.info("SKIPPED Trakt's \'%s\' movies list.", list_type.capitalize())
+                    log.info("SKIPPED Trakt's \'%s\' movies list.",
+                             list_type.capitalize())
                     continue
                 else:
-                    log.info("ADDING %d movie(s) from Trakt's \'%s\' list.", limit, list_type.capitalize())
+                    log.info("ADDING %d movie(s) from Trakt's \'%s\' list.",
+                             limit, list_type.capitalize())
 
                 local_ignore_blacklist = ignore_blacklist
 
@@ -1587,20 +1658,22 @@ def automatic_movies(
                 )
 
             elif list_type.lower() == 'watchlist':
-            
-            
+
                 for authenticate_user, v in value.items():
                     if isinstance(v, dict):
-                        log.debug("Automatic config for %s contains a dictionary. Handle appropriately.",list_type)
+                        log.debug(
+                            "Automatic config for %s contains a dictionary. Handle appropriately.", list_type)
                         limit = v['add_limit']
                         results_limit = v["results_limit"]
                     else:
-                        log.debug("Automatic config for %s contains no dictionary.",list_type)
+                        log.debug(
+                            "Automatic config for %s contains no dictionary.", list_type)
                         limit = v
                         results_limit = 0
-            
+
                     if limit <= 0:
-                        log.info("SKIPPED Trakt user \'%s\''s \'%s\'", authenticate_user, list_type.capitalize)
+                        log.info("SKIPPED Trakt user \'%s\''s \'%s\'",
+                                 authenticate_user, list_type.capitalize)
                         continue
                     else:
                         log.info("ADDING %d movie(s) from Trakt user \'%s\''s \'%s\'", limit,
@@ -1628,17 +1701,20 @@ def automatic_movies(
             elif list_type.lower() == 'lists':
 
                 if len(value.items()) == 0:
-                    log.info("SKIPPED Trakt's \'%s\' movies list", list_type.capitalize())
+                    log.info("SKIPPED Trakt's \'%s\' movies list",
+                             list_type.capitalize())
                     continue
 
                 for list_, v in value.items():
                     if isinstance(v, dict):
-                        log.debug("Automatic config for %s contains a dictionary. Handle appropriately.",list_type)
+                        log.debug(
+                            "Automatic config for %s contains a dictionary. Handle appropriately.", list_type)
                         authenticate_user = v['authenticate_user']
                         limit = v['add_limit']
                         results_limit = v["results_limit"]
                     else:
-                        log.debug("Automatic config for %s contains no dictionary.",list_type)
+                        log.debug(
+                            "Automatic config for %s contains no dictionary.", list_type)
                         authenticate_user = None
                         limit = v
                         results_limit = 0
@@ -1646,7 +1722,8 @@ def automatic_movies(
                         log.info("Skipped Trakt's user list: %s", list_)
                         continue
                     else:
-                        log.info("Adding %d movies from the Trakt list %s", limit, list_type)
+                        log.info(
+                            "Adding %d movies from the Trakt list %s", limit, list_type)
 
                     if limit <= 0:
                         log.info("SKIPPED Trakt's \'%s\' movies list.", list_)
@@ -1675,7 +1752,8 @@ def automatic_movies(
                 continue
             if added_movies is None:
                 if list_type.lower() != 'lists':
-                    log.info("FAILED ADDING movies from Trakt's \'%s\' list.", list_type.capitalize())
+                    log.info(
+                        "FAILED ADDING movies from Trakt's \'%s\' list.", list_type.capitalize())
                 time.sleep(10)
                 continue
             total_movies_added += added_movies
@@ -1683,10 +1761,12 @@ def automatic_movies(
             # sleep
             time.sleep(10)
 
-        log.info("FINISHED: Added %d movie(s) total to Radarr!", total_movies_added)
+        log.info("FINISHED: Added %d movie(s) total to Radarr!",
+                 total_movies_added)
         # send notification
         if notifications and (cfg.notifications.verbose or total_movies_added > 0):
-            notify.send(message="Added %d movie(s) total to Radarr!" % total_movies_added)
+            notify.send(message="Added %d movie(s) total to Radarr!" %
+                        total_movies_added)
 
     except Exception:
         log.exception("Exception while automatically adding movies: ")
@@ -1778,7 +1858,8 @@ def run(
             schedule.run_pending()
 
         except Exception as e:
-            log.exception("Unhandled exception occurred while processing scheduled tasks: %s", e)
+            log.exception(
+                "Unhandled exception occurred while processing scheduled tasks: %s", e)
             time.sleep(1)
 
 
@@ -1802,7 +1883,8 @@ def init_notifications():
 # Handles exit signals, cancels jobs and exits cleanly
 # noinspection PyUnusedLocal
 def exit_handler(signum, frame):
-    log.info("Received %s, canceling jobs and exiting.", signal.Signals(signum).name)
+    log.info("Received %s, canceling jobs and exiting.",
+             signal.Signals(signum).name)
     schedule.clear()
     exit()
 
