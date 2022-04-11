@@ -1330,8 +1330,6 @@ def movies(
             # sleep before adding any more
             time.sleep(add_delay)
 
-            else:
-                blacklisted_movies += 1
         except Exception:
             log.exception(
                 "Exception while processing movie \'%s\': ", movie_title)
