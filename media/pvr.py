@@ -1,5 +1,6 @@
 import os.path
 from abc import ABC, abstractmethod
+from distutils.version import LooseVersion as Version
 
 import backoff
 import requests
@@ -25,7 +26,7 @@ class PVR(ABC):
         try:
             # request system status to validate api_key
             req = requests.get(
-                os.path.join(misc_str.ensure_endswith(self.server_url, "/"), 'api/system/status'),
+                os.path.join(misc_str.ensure_endswith(self.server_url, "/"), 'api/v3/system/status'),
                 headers=self.headers,
                 timeout=60,
                 allow_redirects=False
@@ -67,11 +68,11 @@ class PVR(ABC):
         return None
 
     @backoff.on_predicate(backoff.expo, lambda x: x is None, max_tries=4, on_backoff=backoff_handler)
-    def get_profile_id(self, profile_name):
+    def get_quality_profile_id(self, profile_name):
         try:
             # make request
             req = requests.get(
-                os.path.join(misc_str.ensure_endswith(self.server_url, "/"), 'api/profile'),
+                os.path.join(misc_str.ensure_endswith(self.server_url, "/"), 'api/v3/qualityProfile'),
                 headers=self.headers,
                 timeout=60,
                 allow_redirects=False
@@ -83,20 +84,70 @@ class PVR(ABC):
                 resp_json = req.json()
                 for profile in resp_json:
                     if profile['name'].lower() == profile_name.lower():
-                        log.debug("Found ID of %s profile: %d", profile_name, profile['id'])
+                        log.debug("Found Quality Profile ID for \'%s\': %d", profile_name, profile['id'])
                         return profile['id']
-                    log.debug("Profile %s with id %d did not match %s", profile['name'], profile['id'], profile_name)
+                    log.debug("Profile \'%s\' with ID \'%d\' did not match Quality Profile \'%s\'", profile['name'],
+                              profile['id'], profile_name)
             else:
                 log.error("Failed to retrieve all quality profiles, request response: %d", req.status_code)
         except Exception:
-            log.exception("Exception retrieving id of profile %s: ", profile_name)
+            log.exception("Exception retrieving ID of quality profile %s: ", profile_name)
         return None
 
-    def _prepare_add_object_payload(self, title, title_slug, profile_id, root_folder):
+    @backoff.on_exception(backoff.expo, requests.exceptions.RequestException, max_tries=4, on_backoff=backoff_handler)
+    def get_language_profile_id(self, language_name):
+        try:
+            # check if sonarr is v3
+
+            # make request
+            ver_req = requests.get(
+                os.path.join(misc_str.ensure_endswith(self.server_url, "/"), 'api/system/status'),
+                headers=self.headers,
+                timeout=60,
+                allow_redirects=False
+            )
+
+            if ver_req.status_code == 200:
+                ver_resp_json = ver_req.json()
+                if not Version(ver_resp_json['version']) > Version('3'):
+                    log.debug("Skipping Language Profile lookup because Sonarr version is \'%s\'.",
+                              ver_resp_json['version'])
+                    return None
+
+        except Exception:
+            log.exception("Exception verifying Sonarr version.")
+            return None
+
+        try:
+            # make request
+            req = requests.get(
+                os.path.join(misc_str.ensure_endswith(self.server_url, "/"), 'api/v3/languageprofile'),
+                headers=self.headers,
+                timeout=60,
+                allow_redirects=False
+            )
+            log.debug("Request URL: %s", req.url)
+            log.debug("Request Response: %d", req.status_code)
+
+            if req.status_code == 200:
+                resp_json = req.json()
+                for profile in resp_json:
+                    if profile['name'].lower() == language_name.lower():
+                        log.debug("Found Language Profile ID for \'%s\': %d", language_name, profile['id'])
+                        return profile['id']
+                    log.debug("Profile \'%s\' with ID \'%d\' did not match Language Profile \'%s\'", profile['name'],
+                              profile['id'], language_name)
+            else:
+                log.error("Failed to retrieve all language profiles, request response: %d", req.status_code)
+        except Exception:
+            log.exception("Exception retrieving ID of language profile %s: ", language_name)
+        return None
+
+    def _prepare_add_object_payload(self, title, title_slug, quality_profile_id, root_folder):
         return {
             'title': title,
             'titleSlug': title_slug,
-            'qualityProfileId': profile_id,
+            'qualityProfileId': quality_profile_id,
             'images': [],
             'monitored': True,
             'rootFolderPath': root_folder,
@@ -126,20 +177,22 @@ class PVR(ABC):
             if 'json' in req.headers['Content-Type'].lower():
                 response_json = misc.get_response_dict(req.json(), identifier_field, identifier)
 
-            if (req.status_code == 201 or req.status_code == 200) \
-                    and (response_json and identifier_field in response_json) \
-                    and response_json[identifier_field] == identifier:
-                log.debug("Successfully added %s (%d)", payload['title'], identifier)
+            if (
+                req.status_code in [201, 200]
+                and (response_json and identifier_field in response_json)
+                and response_json[identifier_field] == identifier
+            ):
+                log.debug("Successfully added: \'%s [%d]\'", payload['title'], identifier)
                 return True
             elif response_json and ('errorMessage' in response_json or 'message' in response_json):
                 message = response_json['errorMessage'] if 'errorMessage' in response_json else response_json['message']
 
-                log.error("Failed to add %s (%d) - status_code: %d, reason: %s", payload['title'], identifier,
+                log.error("Failed to add \'%s [%d]\' - status_code: %d, reason: %s", payload['title'], identifier,
                           req.status_code, message)
                 return False
             else:
-                log.error("Failed to add %s (%d), unexpected response:\n%s", payload['title'], identifier, req.text)
+                log.error("Failed to add \'%s [%d]\', unexpected response:\n%s", payload['title'], identifier, req.text)
                 return False
         except Exception:
-            log.exception("Exception adding %s (%d): ", payload['title'], identifier)
+            log.exception("Exception adding \'%s [%d]\': ", payload['title'], identifier)
         return None

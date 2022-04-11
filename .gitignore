@@ -7,6 +7,9 @@
 # IntelliJ
 /out/
 
+# VSCode
+.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -21,7 +24,7 @@ __pycache__/
 
 # configs
 *.cfg
-/config.json
+/*.json
 
 # generators
 *.bat

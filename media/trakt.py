@@ -8,8 +8,10 @@ from cashier import cache
 from helpers.misc import backoff_handler, dict_merge
 from helpers.trakt import extract_list_user_and_key_from_url
 from misc.log import logger
+from misc.config import Config
 
 log = logger.get_logger(__name__)
+cachefile = Config().cachefile
 
 
 class Trakt:
@@ -23,10 +25,13 @@ class Trakt:
     # Requests
     ############################################################
 
-    def _make_request(self, url, payload={}, authenticate_user=None, request_type='get'):
+    def _make_request(self, url, payload=None, authenticate_user=None, request_type='get'):
         headers, authenticate_user = self._headers(authenticate_user)
         headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' \
                                 '(KHTML, like Gecko) Chrome/71.0.3578.80 Safari/537.36'
+
+        if payload is None:
+            payload = {}
 
         if authenticate_user:
             url = url.replace('{authenticate_user}', authenticate_user)
@@ -51,15 +56,18 @@ class Trakt:
         return req, resp_data
 
     @backoff.on_predicate(backoff.expo, lambda x: x is None, max_tries=4, on_backoff=backoff_handler)
-    def _make_item_request(self, url, object_name, payload={}):
+    def _make_item_request(self, url, object_name, payload=None):
+
+        if payload is None:
+            payload = {}
+
         payload = dict_merge(payload, {'extended': 'full'})
 
         try:
             req, resp_data = self._make_request(url, payload)
 
             if req.status_code == 200 and len(resp_data):
-                resp_json = json.loads(resp_data)
-                return resp_json
+                return json.loads(resp_data)
             elif req.status_code == 401:
                 log.error("The authentication to Trakt is revoked. Please re-authenticate.")
                 exit()
@@ -71,10 +79,26 @@ class Trakt:
         return None
 
     @backoff.on_predicate(backoff.expo, lambda x: x is None, max_tries=6, on_backoff=backoff_handler)
-    def _make_items_request(self, url, page, limit, languages, type_name, object_name, authenticate_user=None, payload={},
-                            sleep_between=5, genres=None):
-        if not languages:
-            languages = ['en']
+    def _make_items_request(
+            self,
+            url,
+            limit,
+            type_name,
+            object_name,
+            authenticate_user=None,
+            payload=None,
+            sleep_between=5,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+            include_non_acting_roles=False,
+    ):
+
+        # default payload
+        if payload is None:
+            payload = {}
 
         #Limit pages and results per page if a results_limit was sent.
         if limit == 0:
@@ -83,10 +107,32 @@ class Trakt:
         else:
             limit_results = True
             total_pages, limit = self.getPageAndResultsPerPage(limit)
-            
-        payload = dict_merge(payload, {'extended': 'full', 'limit': limit, 'page': 1, 'languages': ','.join(languages)})
+
+        payload = dict_merge(payload, {
+            'extended': 'full',
+            'limit': limit,
+            'page': 1,
+        })
+
+        # languages list
+        if languages:
+            payload['languages'] = ','.join(languages).lower()
+
+        # years range
+        if years:
+            payload['years'] = years
+
+        # countries list
+        if countries:
+            payload['countries'] = ','.join(countries).lower()
+
+        # genres list
         if genres:
-            payload['genres'] = genres
+            payload['genres'] = ','.join(genres).lower()
+
+        # runtimes range
+        if runtimes:
+            payload['runtimes'] = runtimes
 
         processed = []
 
@@ -95,9 +141,9 @@ class Trakt:
 
         try:
             resp_data = ''
+            max_attempts = 6
             while True:
                 attempts = 0
-                max_attempts = 6
                 retrieve_error = False
                 while attempts <= max_attempts:
                     try:
@@ -139,12 +185,19 @@ class Trakt:
                 log.debug("Response Page: %d of %d", current_page, total_pages)
 
                 if req.status_code == 200 and len(resp_data):
-                    if resp_data.startswith("[{") and resp_data.endswith("}]"):
+                    if (resp_data.startswith("[{") and resp_data.endswith("}]")) or \
+                            (resp_data.startswith("{") and resp_data.endswith("}")):
+
                         resp_json = json.loads(resp_data)
 
                         if type_name == 'person' and 'cast' in resp_json:
-                            # handle person results
                             for item in resp_json['cast']:
+                                # filter out non-acting roles
+                                if not include_non_acting_roles and \
+                                        ((item['character'].strip() == '') or
+                                         'narrat' in item['character'].lower() or
+                                         'himself' in item['character'].lower()):
+                                    continue
                                 if item not in processed:
                                     if object_name.rstrip('s') not in item and 'title' in item:
                                         processed.append({object_name.rstrip('s'): item})
@@ -158,18 +211,20 @@ class Trakt:
                                     else:
                                         processed.append(item)
 
+                    elif resp_data == '[]':
+                        log.warning("Received empty JSON response for page: %d of %d", current_page, total_pages)
                     else:
                         log.warning("Received malformed JSON response for page: %d of %d", current_page, total_pages)
 
                     # check if we have fetched the last page, break if so
                     if total_pages == 0:
-                        log.debug("There were no more pages to retrieve")
+                        log.debug("There were no more pages left to retrieve.")
                         break
                     elif current_page >= total_pages:
-                        log.debug("There are no more pages to retrieve results from")
+                        log.debug("There are no more pages left to retrieve results from.")
                         break
                     else:
-                        log.info("There are %d pages left to retrieve results from", total_pages - current_page)
+                        log.info("There are %d page(s) left to retrieve results from.", total_pages - current_page)
                         payload['page'] += 1
                         time.sleep(sleep_between)
 
@@ -374,7 +429,7 @@ class Trakt:
     def _renew_oauth_token_if_expired(self, user):
         token_information = self.cfg['trakt'][user]
 
-        # Check if the acces_token for the user is expired
+        # Check if the access_token for the user is expired
         expires_at = token_information['created_at'] + token_information['expires_in']
         if expires_at < round(time.time()):
             log.info("The access token for the user %s has expired. We're requesting a new one; please wait a moment.",
@@ -424,115 +479,242 @@ class Trakt:
             object_name='show',
         )
 
-    @cache(cache_file='get_trending_shows.db', cache_time=cache_time, retry_if_blank=True)     
-    def get_trending_shows(self, page=None, limit=0, languages=None, genres=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_trending_shows(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/shows/trending',
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='shows',
             type_name='trending',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
 
-    @cache(cache_file='get_popular_shows.db', cache_time=cache_time, retry_if_blank=True)       
-    def get_popular_shows(self, page=None, limit=0, languages=None, genres=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_popular_shows(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/shows/popular',
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='shows',
             type_name='popular',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
 
-    @cache(cache_file='get_anticipated_shows.db', cache_time=cache_time, retry_if_blank=True)       
-    def get_anticipated_shows(self, page=None, limit=0, languages=None, genres=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_anticipated_shows(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/shows/anticipated',
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='shows',
             type_name='anticipated',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
 
-#   @cache(cache_file='get_person_shows.db', cache_time=cache_time, retry_if_blank=True)       
-    def get_person_shows(self, person, page=None, limit=0, languages=None, genres=None):
+    def get_person_shows(
+            self,
+            page=None,
+            person,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+            include_non_acting_roles=False,
+    ):
+
         return self._make_items_request(
-            url='https://api.trakt.tv/people/%s/shows' % person,
+            url='https://api.trakt.tv/people/%s/shows' % person.replace(' ', '-').lower(),
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='shows',
             type_name='person',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
+            include_non_acting_roles=include_non_acting_roles,
         )
 
-#    @cache(cache_file='get_most_played_shows.db', cache_time=cache_time, retry_if_blank=True)       
-    def get_most_played_shows(self, page=None, limit=0, languages=None, genres=None, most_type=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_most_played_shows(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+            most_type=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/shows/played/%s' % ('weekly' if not most_type else most_type),
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='shows',
             type_name='played',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
 
-#    @cache(cache_file='get_most_watched_shows.db', cache_time=cache_time, retry_if_blank=True)       
-    def get_most_watched_shows(self, page=None, limit=0, languages=None, genres=None, most_type=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_most_watched_shows(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+            most_type=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/shows/watched/%s' % ('weekly' if not most_type else most_type),
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='shows',
             type_name='watched',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
 
-    @cache(cache_file='get_recommended_shows.db', cache_time=cache_time, retry_if_blank=True)   
-    def get_recommended_shows(self, authenticate_user=None, page=None, limit=0, languages=None, genres=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_recommended_shows(
+            self,
+            page=None,
+            authenticate_user=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/recommendations/shows',
-            authenticate_user=authenticate_user,
-            page=page,
-            limit=limit,
-            languages=languages,
             object_name='shows',
             type_name='recommended from {authenticate_user}',
-            genres=genres
-        )
-
-    def get_watchlist_shows(self, authenticate_user=None, page=None, limit=0, languages=None):
-        return self._make_items_request(
-            url='https://api.trakt.tv/users/{authenticate_user}/watchlist/shows',
             authenticate_user=authenticate_user,
             page=page,
             limit=limit,
+            years=years,
+            countries=countries,
             languages=languages,
-            object_name='shows',
-            type_name='watchlist from {authenticate_user}',
+            genres=genres,
+            runtimes=runtimes,
         )
 
-    def get_user_list_shows(self, list_url, authenticate_user=None, page=None, limit=0, languages=None):
+    def get_watchlist_shows(
+            self,
+            page=None,
+            authenticate_user=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
+        return self._make_items_request(
+            url='https://api.trakt.tv/users/{authenticate_user}/watchlist/shows',
+            object_name='shows',
+            type_name='watchlist from {authenticate_user}',
+            authenticate_user=authenticate_user,
+            page=page,
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
+        )
+
+    def get_user_list_shows(
+            self,
+            page=None,
+            list_url,
+            authenticate_user=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         list_user, list_key = extract_list_user_and_key_from_url(list_url)
 
         log.debug('Fetching %s from %s', list_key, list_user)
 
         return self._make_items_request(
             url='https://api.trakt.tv/users/' + list_user + '/lists/' + list_key + '/items/shows',
+            object_name='shows',
+            type_name=(list_key + ' from ' + list_user),
             authenticate_user=authenticate_user,
             page=page,
             limit=limit,
+            years=years,
+            countries=countries,
             languages=languages,
-            object_name='shows',
-            type_name=(list_key + ' from ' + list_user),
+            genres=genres,
+            runtimes=runtimes,
         )
 
     ############################################################
@@ -545,123 +727,253 @@ class Trakt:
             object_name='movie',
         )
 
-    @cache(cache_file='get_trending_movies.db', cache_time=cache_time, retry_if_blank=True)
-    def get_trending_movies(self, page=None, limit=0, languages=None, genres=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_trending_movies(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/movies/trending',
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='movies',
             type_name='trending',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
 
-    @cache(cache_file='get_popular_movies.db', cache_time=cache_time, retry_if_blank=True)
-    def get_popular_movies(self, page=None, limit=0, languages=None, genres=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_popular_movies(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/movies/popular',
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='movies',
             type_name='popular',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
 
-    @cache(cache_file='get_anticipated_movies.db', cache_time=cache_time, retry_if_blank=True)
-    def get_anticipated_movies(self, page=None, limit=0, languages=None, genres=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_anticipated_movies(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/movies/anticipated',
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='movies',
             type_name='anticipated',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
 
-#    @cache(cache_file='get_person_movies.db', cache_time=cache_time, retry_if_blank=True)
-    def get_person_movies(self, person, page=None, limit=0, languages=None, genres=None):
+    def get_person_movies(
+            self,
+            page=None,
+            person,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+            include_non_acting_roles=False,
+    ):
+
         return self._make_items_request(
-            url='https://api.trakt.tv/people/%s/movies' % person,
+            url='https://api.trakt.tv/people/%s/movies' % person.replace(' ', '-').lower(),
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='movies',
             type_name='person',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
+            include_non_acting_roles=include_non_acting_roles,
         )
 
-#    @cache(cache_file='get_most_played_movies.db', cache_time=cache_time, retry_if_blank=True)
-    def get_most_played_movies(self, page=None, limit=0, languages=None, genres=None, most_type=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_most_played_movies(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+            most_type=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/movies/played/%s' % ('weekly' if not most_type else most_type),
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='movies',
             type_name='played',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
 
-#    @cache(cache_file='get_most_watched_movies.db', cache_time=cache_time, retry_if_blank=True)
-    def get_most_watched_movies(self, page=None, limit=0, languages=None, genres=None, most_type=None):
+    @cache(cache_file=cachefile, retry_if_blank=True)
+    def get_most_watched_movies(
+            self,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            most_type=None,
+            runtimes=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/movies/watched/%s' % ('weekly' if not most_type else most_type),
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='movies',
             type_name='watched',
-            genres=genres
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
         )
-    @cache(cache_file='get_boxoffice_movies.db', cache_time=cache_time, retry_if_blank=True)
-    def get_boxoffice_movies(self, page=None, limit=0, languages=None):
+
+    def get_boxoffice_movies(
+            self,
+            limit=10,
+            page=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/movies/boxoffice',
             page=page,
-            limit=limit,
-            languages=languages,
             object_name='movies',
             type_name='boxoffice',
+            limit=limit,
         )
 
-    @cache(cache_file='get_recommended_movies.db', cache_time=cache_time, retry_if_blank=True)  
-    def get_recommended_movies(self, authenticate_user=None, page=None, limit=0, languages=None, genres=None):
+    def get_recommended_movies(
+            self,
+            authenticate_user=None,
+            page=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         return self._make_items_request(
             url='https://api.trakt.tv/recommendations/movies',
-            authenticate_user=authenticate_user,
-            page=page,
-            limit=limit,
-            languages=languages,
             object_name='movies',
             type_name='recommended from {authenticate_user}',
-            genres=genres
-        )
-
-    def get_watchlist_movies(self, authenticate_user=None, page=None, limit=0, languages=None):
-        return self._make_items_request(
-            url='https://api.trakt.tv/users/{authenticate_user}/watchlist/movies',
             authenticate_user=authenticate_user,
             page=page,
             limit=limit,
+            years=years,
+            countries=countries,
             languages=languages,
-            object_name='movies',
-            type_name='watchlist from {authenticate_user}',
+            genres=genres,
+            runtimes=runtimes,
         )
 
-    def get_user_list_movies(self, list_url, authenticate_user=None, page=None, limit=0, languages=None):
+    def get_watchlist_movies(
+            self,
+            page=None,
+            authenticate_user=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
+        return self._make_items_request(
+            url='https://api.trakt.tv/users/{authenticate_user}/watchlist/movies',
+            object_name='movies',
+            type_name='watchlist from {authenticate_user}',
+            authenticate_user=authenticate_user,
+            page=page,
+            limit=limit,
+            years=years,
+            countries=countries,
+            languages=languages,
+            genres=genres,
+            runtimes=runtimes,
+        )
+
+    def get_user_list_movies(
+            self,
+            page=None,
+            list_url,
+            authenticate_user=None,
+            limit=1000,
+            years=None,
+            countries=None,
+            languages=None,
+            genres=None,
+            runtimes=None,
+    ):
+
         list_user, list_key = extract_list_user_and_key_from_url(list_url)
 
         log.debug('Fetching %s from %s', list_key, list_user)
 
         return self._make_items_request(
             url='https://api.trakt.tv/users/' + list_user + '/lists/' + list_key + '/items/movies',
+            object_name='movies',
+            type_name=(list_key + ' from ' + list_user),
             authenticate_user=authenticate_user,
             page=page,
             limit=limit,
+            years=years,
+            countries=countries,
             languages=languages,
-            object_name='movies',
-            type_name=(list_key + ' from ' + list_user),
+            genres=genres,
+            runtimes=runtimes,
         )

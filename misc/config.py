@@ -37,52 +37,8 @@ class Config(object, metaclass=Singleton):
         'core': {
             'debug': False
         },
-        'trakt': {
-            'client_id': '',
-            'client_secret': ''
-        },
-        'sonarr': {
-            'api_key': '',
-            'profile': 'HD-1080p',
-            'root_folder': '/tv/',
-            'tags': {
-            },
-            'url': 'http://localhost:8989/'
-        },
-        'radarr': {
-            'api_key': '',
-            'minimum_availability': 'released',
-            'profile': 'HD-1080p',
-            'root_folder': '/movies/',
-            'url': 'http://localhost:7878/'
-        },
-        'omdb': {
-            'api_key': ''
-        },
-        'filters': {
-            'shows': {
-                'disabled_for': [],
-                'blacklisted_genres': [],
-                'blacklisted_networks': [],
-                'allowed_countries': [],
-                'allowed_languages': [],
-                'blacklisted_min_runtime': 15,
-                'blacklisted_min_year': 2000,
-                'blacklisted_max_year': 2019,
-                'blacklisted_tvdb_ids': [],
-            },
-            'movies': {
-                'disabled_for': [],
-                'blacklisted_genres': [],
-                'blacklisted_min_runtime': 60,
-                'blacklisted_min_year': 2000,
-                'blacklisted_max_year': 2019,
-                'blacklist_title_keywords': [],
-                'blacklisted_tmdb_ids': [],
-                'allowed_countries': [],
-                'allowed_languages': [],
-                'rating_limit':""
-            }
+        'notifications': {
+            'verbose': True
         },
         'automatic': {
             'movies': {
@@ -99,16 +55,65 @@ class Config(object, metaclass=Singleton):
                 'popular': 1
             }
         },
-        'notifications': {
-            'verbose': True
+        'filters': {
+            'shows': {
+                'disabled_for': [],
+                'allowed_countries': [],
+                'allowed_languages': [],
+                'blacklisted_genres': [],
+                'blacklisted_networks': [],
+                'blacklisted_min_runtime': 15,
+                'blacklisted_max_runtime': 0,
+                'blacklisted_min_year': 2000,
+                'blacklisted_max_year': 2019,
+                'blacklisted_title_keywords': [],
+                'blacklisted_tvdb_ids': [],
+            },
+            'movies': {
+                'disabled_for': [],
+                'allowed_countries': [],
+                'allowed_languages': [],
+                'blacklisted_genres': [],
+                'blacklisted_min_runtime': 60,
+                'blacklisted_max_runtime': 0,
+                'blacklisted_min_year': 2000,
+                'blacklisted_max_year': 2019,
+                'blacklisted_title_keywords': [],
+                'blacklisted_tmdb_ids': [],
+                'rotten_tomatoes': ""
+            }
+        },
+        'radarr': {
+            'api_key': '',
+            'minimum_availability': 'released',
+            'quality': 'HD-1080p',
+            'root_folder': '/movies/',
+            'url': 'http://localhost:7878/'
+        },
+        'sonarr': {
+            'api_key': '',
+            'language': 'English',
+            'quality': 'HD-1080p',
+            'root_folder': '/tv/',
+            'season_folder': True,
+            'tags': [],
+            'url': 'http://localhost:8989/'
+        },
+        'omdb': {
+            'api_key': ''
+        },
+        'trakt': {
+            'client_id': '',
+            'client_secret': ''
         }
     }
 
-    def __init__(self, config_path, logfile):
+    def __init__(self, configfile, cachefile, logfile):
         """Initializes config"""
         self.conf = None
 
-        self.config_path = config_path
+        self.config_path = configfile
+        self.cache_path = cachefile
         self.log_path = logfile
 
     @property
@@ -135,17 +140,20 @@ class Config(object, metaclass=Singleton):
             return self.conf
 
     @property
+    def cachefile(self):
+        return self.cache_path
+
+    @property
     def logfile(self):
         return self.log_path
 
     def build_config(self):
-        if not os.path.exists(self.config_path):
-            print("Dumping default config to: %s" % self.config_path)
-            with open(self.config_path, 'w') as fp:
-                json.dump(self.base_config, fp, sort_keys=True, indent=2)
-            return True
-        else:
+        if os.path.exists(self.config_path):
             return False
+        print("Dumping default config to: %s" % self.config_path)
+        with open(self.config_path, 'w') as fp:
+            json.dump(self.base_config, fp, sort_keys=True, indent=2)
+        return True
 
     def dump_config(self):
         if os.path.exists(self.config_path):
@@ -176,10 +184,10 @@ class Config(object, metaclass=Singleton):
                     continue
 
                 # iterate children
-                if isinstance(v, dict) or isinstance(v, list):
+                if isinstance(v, (dict, list)):
                     merged[k], did_upgrade = self.__inner_upgrade(settings1[k], settings2[k], key=k,
                                                                   overwrite=overwrite)
-                    sub_upgraded = did_upgrade if did_upgrade else sub_upgraded
+                    sub_upgraded = did_upgrade or sub_upgraded
                 elif settings1[k] != settings2[k] and overwrite:
                     merged = settings1
                     sub_upgraded = True

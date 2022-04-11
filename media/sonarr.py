@@ -31,7 +31,7 @@ class Sonarr(PVR):
 
             if req.status_code == 200:
                 resp_json = req.json()
-                log.debug("Found %d tags", len(resp_json))
+                log.debug("Found Sonarr Tags: %d", len(resp_json))
                 for tag in resp_json:
                     tags[tag['label']] = tag['id']
                 return tags
@@ -42,18 +42,25 @@ class Sonarr(PVR):
         return None
 
     @backoff.on_predicate(backoff.expo, lambda x: x is None, max_tries=4, on_backoff=backoff_handler)
-    def add_series(self, series_tvdbid, series_title, series_title_slug, profile_id, root_folder, tag_ids=None,
-                   search_missing=False):
-        payload = self._prepare_add_object_payload(series_title, series_title_slug, profile_id, root_folder)
+    def add_series(self, series_tvdb_id, series_title, series_title_slug, quality_profile_id, language_profile_id,
+                   root_folder, season_folder=True, tag_ids=None, search_missing=False, series_type='standard'):
+        payload = self._prepare_add_object_payload(series_title, series_title_slug, quality_profile_id, root_folder)
 
         payload = dict_merge(payload, {
-            'tvdbId': series_tvdbid,
+            'tvdbId': series_tvdb_id,
             'tags': [] if not tag_ids or not isinstance(tag_ids, list) else tag_ids,
             'seasons': [],
-            'seasonFolder': True,
+            'seasonFolder': season_folder,
+            'seriesType': series_type,
             'addOptions': {
                 'searchForMissingEpisodes': search_missing
             }
         })
 
-        return self._add_object('api/series', payload, identifier_field='tvdbId', identifier=series_tvdbid)
+        if language_profile_id:
+            payload['languageProfileId'] = language_profile_id
+            endpoint = 'api/v3/series'
+        else:
+            endpoint = 'api/series'
+
+        return self._add_object(endpoint, payload, identifier_field='tvdbId', identifier=series_tvdb_id)
